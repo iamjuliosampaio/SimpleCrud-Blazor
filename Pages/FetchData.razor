@@ -1,0 +1,147 @@
+﻿@page "/fetchdata"
+
+@using first_steps_blazor.Data
+@using System.Collections.Generic
+@inject WeatherForecastService ForecastService
+@inject IJSRuntime JSRuntime
+
+<h1>Weather forecast</h1>
+
+<p>This component demonstrates fetching data from a service.</p>
+
+@if (forecasts == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <EditForm Model=@Forecast OnValidSubmit=@AddForecast>
+        <DataAnnotationsValidator/>
+        <ValidationSummary/>
+
+        <InputText @bind-Value=currentId type="hidden" />
+
+        <div class="form-group">
+            <label for="date">Date</label>
+            <InputDate @bind-Value=Forecast.Date class="form-control" id="date" placeholder="Date" />
+            <ValidationMessage For="() => Forecast.Date"/>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group col-md-6">
+                <label for="tempC">Temp. (C)</label>
+                <InputNumber @bind-Value="Forecast.TemperatureC" 
+                    @onblur="UpdateTemperature" class="form-control" id="tempC" placeholder="Temp. (C)" />
+                <ValidationMessage For="() => Forecast.TemperatureC"/>
+            </div>
+
+            <div class="form-group col-md-6">
+                <label for="tempF">Temp. (F)</label>
+                <InputNumber @bind-Value=calculatedTemperatureF disabled class="form-control" id="tempF" placeholder="Temp. (F)" />
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="summary">Summary</label>
+            <InputSelect @bind-Value=Forecast.Summary class="form-control" id="summary">
+                <option>Select an option...</option>
+                @foreach (var summary in summaries)
+                {
+                    <option value="@summary">@summary</option>
+                }
+            </InputSelect>
+            <ValidationMessage For="() => Forecast.Summary"/>
+        </div>
+
+        <input type="submit" class="btn btn-primary" value="+ Add" />
+    </EditForm>
+
+    <hr />
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Temp. (C)</th>
+                <th>Temp. (F)</th>
+                <th>Summary</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var forecast in forecasts)
+            {
+                <tr>
+                    <td>@forecast.Date.ToShortDateString()</td>
+                    <td>@forecast.TemperatureC</td>
+                    <td>@forecast.TemperatureF</td>
+                    <td>@forecast.Summary</td>
+                    <td colspan="2">
+                        <button class="btn btn-secondary" @onclick="@(async() => await EditForecast(@forecast.Id))">Edit</button>
+                        <button class="btn btn-danger" @onclick="@(async() => await DeleteForecast(@forecast.Id))">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    WeatherForecast Forecast = new WeatherForecast();
+    private string[] summaries;
+    private List<WeatherForecast> forecasts;
+    private int calculatedTemperatureF = 0;
+    private string currentId = null;
+
+    private async Task UpdateTemperature()
+    {
+        calculatedTemperatureF = 32 + (int)(Forecast.TemperatureC / 0.5556);
+    }
+
+    private async Task AddForecast()
+    {
+        if (currentId != null)
+        {
+            await ForecastService.Update(Int32.Parse(currentId), this.Forecast);
+            await JSRuntime.InvokeVoidAsync("alert", "Updated!");
+        }
+        else
+        {
+            await ForecastService.Add(this.Forecast);
+            await JSRuntime.InvokeVoidAsync("alert", "Added!");
+        }
+        await Reset();
+    }
+
+    private async Task Reset()
+    {
+        this.Forecast = new WeatherForecast();
+        this.currentId = null;
+        calculatedTemperatureF = 0;
+        await UpdateTemperature();
+    }
+
+    private async Task EditForecast(int id)
+    {
+        this.Forecast = await ForecastService.GetById(id);
+        this.currentId = this.Forecast.Id.ToString();
+    }
+
+    private async Task DeleteForecast(int id)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure?");
+        if (confirmed)
+        {
+            await ForecastService.Delete(id);
+            await JSRuntime.InvokeVoidAsync("alert", "Done!");
+            forecasts = await ForecastService.GetAll();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        forecasts = await ForecastService.GetAll();
+        summaries = await ForecastService.GetSummaries();
+        await Reset();
+    }
+}
